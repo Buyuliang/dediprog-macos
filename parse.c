@@ -4,12 +4,27 @@
 #include <libgen.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+static int mac_executable_path(char *path, uint32_t capacity)
+{
+    return _NSGetExecutablePath(path, &capacity);
+}
+#endif
 #ifdef __FreeBSD__
 #include <sys/auxv.h>
 #else
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 #endif
+
+/* dirname() need not modify its input buffer on macOS. */
+static void path_parent(char *path)
+{
+    char *parent = dirname(path);
+    if (parent != path)
+        memmove(path, parent, strlen(parent) + 1);
+}
 
 #define pathbufsize 1024
 #define testbufsize 256
@@ -25,13 +40,17 @@ FILE* openChipInfoDb(void)
     char Path[linebufsize];
 
     memset(Path, 0, linebufsize);
+#ifdef __APPLE__
+    if (mac_executable_path(Path, linebufsize) == 0) {
+#else
     if (readlink("/proc/self/exe", Path, 512) != -1) {
-        dirname(Path);
+#endif
+        path_parent(Path);
         strcat(Path, "/ChipInfoDb.dedicfg");
         if ((fp = fopen(Path, "rt")) == NULL) {
             // ChipInfoDb.dedicfg not in program directory
-            dirname(Path);
-            dirname(Path);
+            path_parent(Path);
+            path_parent(Path);
             strcat(Path, "/share/DediProg/ChipInfoDb.dedicfg");
             if ((fp = fopen(Path, "rt")) == NULL)
                 fprintf(stderr, "Error opening file: %s\n", Path);
@@ -246,6 +265,28 @@ static void parse_chip_node(xmlNodePtr cur_node, CHIP_INFO* chip) {
     chip->BlockSizeInByte = get_prop_long(cur_node, "BlockSizeInByte", 10);
     chip->PageSizeInByte = get_prop_long(cur_node, "PageSizeInByte", 10);
 
+    chip->AddrWidth = get_prop_long(cur_node, "AddrWidth", 10);
+    chip->ReadDummyLen = get_prop_long(cur_node, "ReadDummyLen", 10);
+    chip->IDNumber = get_prop_long(cur_node, "IDNumber", 10);
+    chip->RDIDCommand = get_prop_long(cur_node, "RDIDCommand", 16);
+    chip->Timeout = get_prop_long(cur_node, "Timeout", 10);
+    chip->ReadCmd = get_prop_long(cur_node, "ReadCmd", 16);
+    chip->ProgramCmd = get_prop_long(cur_node, "ProgramCmd", 16);
+    chip->EraseCmd = get_prop_long(cur_node, "EraseCmd", 16);
+    chip->ManufactureID = get_prop_long(cur_node, "ManufactureID", 16);
+    chip->ChipEraseTime = get_prop_long(cur_node, "ChipEraseTime", 10);
+    chip->ProtectBlockMask = get_prop_long(cur_node, "ProtectBlockMask", 16);
+    chip->UnlockCmd = get_prop_long(cur_node, "UnlockCmd", 16);
+    chip->RDSRCnt = get_prop_long(cur_node, "RDSRCnt", 10);
+    chip->WRSRCnt = get_prop_long(cur_node, "WRSRCnt", 10);
+    chip->WRSRCmd = get_prop_long(cur_node, "WRSRCmd", 16);
+    chip->RDSRCmd = get_prop_long(cur_node, "RDSRCmd", 16);
+    chip->WRCRCmd = get_prop_long(cur_node, "WRCRCmd", 16);
+    chip->RDCRCmd = get_prop_long(cur_node, "RDCRCmd", 16);
+    chip->QEbitAddr = get_prop_long(cur_node, "QEbitAddr", 16);
+    chip->SupportedProduct = get_prop_long(cur_node, "SupportedProduct", 16);
+    chip->VppSupport = get_prop_long(cur_node, "VppSupport", 10);
+
     // Voltage mapping
     str = get_prop_string(cur_node, "Voltage");
     if (str) {
@@ -273,12 +314,16 @@ bool GetChipDbPath(char *Path) {
         return false;
 
     memset(Path, 0, linebufsize);
+#ifdef __APPLE__
+    if (mac_executable_path(Path, linebufsize) == 0) {
+#else
     if (readlink("/proc/self/exe", Path, 512) != -1) {
-        dirname(Path);
+#endif
+        path_parent(Path);
         strcat(Path, "/ChipInfoDb.dedicfg");
         if ((fp = fopen(Path, "rt")) == NULL) {
-            dirname(Path);
-            dirname(Path);
+            path_parent(Path);
+            path_parent(Path);
             strcat(Path, "/share/DediProg/ChipInfoDb.dedicfg");
             if ((fp = fopen(Path, "rt")) == NULL) {
                 fprintf(stderr, "Error opening file: %s\n", Path);

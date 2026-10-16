@@ -7,6 +7,7 @@
 #include <libusb-1.0/libusb.h>
 #endif
 #include <string.h>
+#include <stdlib.h>
 
 unsigned int m_nbDeviceDetected = 0;
 unsigned char DevIndex = 0;
@@ -324,7 +325,7 @@ int BulkPipeRead(unsigned char* pBuff, unsigned int timeOut, int Index)
     ret = libusb_bulk_transfer(dediprog_handle[Index], 2 | LIBUSB_ENDPOINT_IN, pBuff, cnRead, &actual_length, DEFAULT_TIMEOUT);  
     if (ret != 0) //libusb_bulk_transfer return false
         return 0; 
-    return cnRead;
+    return actual_length;
 }
 
 //long CUSB::BulkPipeWrite(PBYTE pBuff, UINT sz, UINT timeOut) const
@@ -623,7 +624,7 @@ long flash_ReadId(unsigned int read_id_code, unsigned int out_data_size, int Ind
     for (i = 0; i < out_data_size; i++) {
         rc = (rc << 8) + vInstruction[i];
     }
-    // printf("\n(Simon)Flash ID 0x%x (0x%x, %d)\n",rc, read_id_code, out_data_size);
+    if (getenv("DEDIPROG_TRACE_ID")) printf("Flash ID 0x%lx (opcode 0x%x, %u bytes)\n", rc, read_id_code, out_data_size);
     return rc;
 }
 

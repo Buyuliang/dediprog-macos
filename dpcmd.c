@@ -603,6 +603,10 @@ int main(int argc, char* argv[])
 #endif
            GetConfigVer(), __DATE__); // 1. new feature.bug.configS
 
+    /* Listing the database does not require a connected programmer. */
+    if (argc == 2 && strcmp(argv[1], "--list") == 0)
+        return Dedi_List_AllChip() ? 0 : 1;
+
     g_ucOperation = 0;
     GetLogPath(g_LogPath);
 
@@ -893,6 +897,20 @@ int main(int argc, char* argv[])
     }
 
     if (bDetect == true) {
+        /* Detection bypasses InitProject; normalize the requested voltage too. */
+        int targets[] = { STARTUP_APPLI_CARD, STARTUP_APPLI_SF_1,
+                          STARTUP_APPLI_SF_2, STARTUP_APPLI_SF_SKT };
+        if (g_ucTarget >= sizeof(targets) / sizeof(targets[0])) {
+            iExitCode = EXCODE_FAIL_IDENTIFY;
+            goto Exit;
+        }
+        for (int i = 0; i < dev_cnt; ++i) {
+            SetTargetFlash((unsigned char)targets[g_ucTarget], i);
+            SetSPIIOMode(i);
+            SetSPIClock(i);
+            SetVcc(i);
+            SetVppVoltage(0, i);
+        }
         if (bDevice == false) {
             if (bDeviceSN) {
                 char* arg_temp = &l_opt_arg[2];
@@ -1890,6 +1908,10 @@ void do_Read(void)
 
 void do_DisplayOrSave(void)
 {
+    if (!g_bStatus) {
+        printf("Read failed; no backup file saved.\n");
+        return;
+    }
     int dev_cnt = get_usb_dev_cnt();
 
     if (g_uiDevNum == 0) {
@@ -1908,9 +1930,9 @@ void do_DisplayOrSave(void)
             } else {
                 UploadAddrRange.length = UploadAddrRange.end - UploadAddrRange.start;
 
-                char SourceStr[64];
+                char SourceStr[4096];
 
-                sprintf(SourceStr, "%s", g_parameter_read);
+                snprintf(SourceStr, sizeof(SourceStr), "%s", g_parameter_read);
 
                 if (dev_cnt > 1) {
                     int len = strlen(SourceStr);
